@@ -110,6 +110,17 @@ function createWindow () {
   //win.loadFile(join(__dirname, 'index.html'));
   win.loadURL(appURL);
 
+  // Intercept any navigation away from the app URL and open externally
+  win.webContents.on('will-navigate', (event, url) => {
+    const appHost = new URL(appURL).host;
+    const targetHost = new URL(url).host;
+    if (targetHost !== appHost) {
+      console.log('will-navigate external: ', url);
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
   // Link clicks open new windows, let's force them to open links in
   // the default browser
   win.webContents.setWindowOpenHandler(({url}) => {

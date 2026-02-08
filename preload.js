@@ -4,10 +4,10 @@ const { ipcRenderer } = require('electron');
 window.addEventListener('DOMContentLoaded', () => {
     // Listen for click events and fire open-external-link as needed
     document.addEventListener('click', (event) => {
-        ipcRenderer.send('click-link');
-	if (event.target.tagName === 'A' && event.target.href.startsWith('http')) {
+        const link = event.target.closest('a');
+        if (link && link.href && link.href.startsWith('http')) {
             event.preventDefault();
-            ipcRenderer.send('open-external-link', event.target.href);
+            ipcRenderer.send('open-external-link', link.href);
         }
     });
 });
