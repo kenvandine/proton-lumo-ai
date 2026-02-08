@@ -1,7 +1,18 @@
 const { ipcRenderer } = require('electron');
 
-// List for DOMContentLoaded event
+// Network status detection
+function updateNetworkStatus() {
+    ipcRenderer.send('network-status', navigator.onLine);
+}
+
+window.addEventListener('online', updateNetworkStatus);
+window.addEventListener('offline', updateNetworkStatus);
+
+// Listen for DOMContentLoaded event
 window.addEventListener('DOMContentLoaded', () => {
+    // Send initial network status
+    updateNetworkStatus();
+
     // Listen for click events and fire open-external-link as needed
     document.addEventListener('click', (event) => {
         const link = event.target.closest('a');

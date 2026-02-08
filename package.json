@@ -24,14 +24,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kenvandine/lumo-ai.git"
+    "url": "git+https://github.com/kenvandine/proton-lumo-ai.git"
   },
   "author": "Ken VanDine",
   "license": "GPL-3.0",
   "bugs": {
-    "url": "https://github.com/kenvandine/lumo-ai/issues"
+    "url": "https://github.com/kenvandine/proton-lumo-ai/issues"
   },
-  "homepage": "https://github.com/kenvandine/lumo-ai#readme",
+  "homepage": "https://github.com/kenvandine/proton-lumo-ai#readme",
   "devDependencies": {
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0",

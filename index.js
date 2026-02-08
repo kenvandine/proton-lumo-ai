@@ -5,6 +5,7 @@ const fs = require('fs');
 let tray = null;
 let win = null;
 let autostart = false;
+let wasOffline = false;
 const appURL = 'https://lumo.proton.me'
 const icon = nativeImage.createFromPath(join(__dirname, '/assets/img/icon.png'));
 const isTray = process.argv.includes('--tray');
@@ -25,7 +26,7 @@ function handleAutoStartChange() {
   if (autostart) {
     console.log("Enabling autostart");
     if (!fs.existsSync(snapUserData + '/.config/autostart')) {
-      fs.mkdirSync(snapUserData + '/.config/autostart', recursive=true);
+      fs.mkdirSync(snapUserData + '/.config/autostart', { recursive: true });
     }
     if (!fs.existsSync(snapUserData + '/.config/autostart/proton-lumo.ai.desktop')) {
       fs.copyFileSync(snapPath + '/com.github.kenvandine.lumo.ai-autostart.desktop', snapUserData + '/.config/autostart/proton-lumo.ai.desktop');
@@ -37,6 +38,49 @@ function handleAutoStartChange() {
     }
   }
 }
+
+// IPC listeners (registered once, outside createWindow to avoid leaks)
+ipcMain.on('zoom-in', () => {
+  console.log('zoom-in');
+  const currentZoom = win.webContents.getZoomLevel();
+  win.webContents.setZoomLevel(currentZoom + 1);
+});
+
+ipcMain.on('zoom-out', () => {
+  console.log('zoom-out');
+  const currentZoom = win.webContents.getZoomLevel();
+  win.webContents.setZoomLevel(currentZoom - 1);
+});
+
+ipcMain.on('zoom-reset', () => {
+  console.log('zoom-reset');
+  win.webContents.setZoomLevel(0);
+});
+
+ipcMain.on('log-message', (event, message) => {
+  console.log('Log from preload: ', message);
+});
+
+// Open links with default browser
+ipcMain.on('open-external-link', (event, url) => {
+  console.log('open-external-link: ', url);
+  if (url) {
+    shell.openExternal(url);
+  }
+});
+
+// Listen for network status updates from the preload script
+// Only act on transitions to avoid reload loops
+ipcMain.on('network-status', (event, isOnline) => {
+  console.log(`Network status: ${isOnline ? 'online' : 'offline'}`);
+  if (isOnline && wasOffline) {
+    wasOffline = false;
+    win.loadURL(appURL);
+  } else if (!isOnline) {
+    wasOffline = true;
+    win.loadFile('./assets/html/offline.html');
+  }
+});
 
 function createWindow () {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -67,47 +111,6 @@ function createWindow () {
     win.hide();
   });
 
-  ipcMain.on('zoom-in', () => {
-    console.log('zoom-in');
-    const currentZoom = win.webContents.getZoomLevel();
-    win.webContents.setZoomLevel(currentZoom + 1);
-  });
-
-  ipcMain.on('zoom-out', () => {
-    console.log('zoom-out');
-    const currentZoom = win.webContents.getZoomLevel();
-    win.webContents.setZoomLevel(currentZoom - 1);
-  });
-
-  ipcMain.on('zoom-reset', () => {
-    console.log('zoom-reset');
-    win.webContents.setZoomLevel(0);
-  });
-
-  ipcMain.on('log-message', (event, message) => {
-    console.log('Log from preload: ', message);
-  });
-
-  // Open links with default browser
-  ipcMain.on('open-external-link', (event, url) => {
-    console.log('open-external-link: ', url);
-    if (url) {
-      shell.openExternal(url);
-    }
-  });
-
-  // Listen for network status updates from the renderer process
-  ipcMain.on('network-status', (event, isOnline) => {
-    console.log(`Network status: ${isOnline ? 'online' : 'offline'}`);
-    console.log("network-status changed: " + isOnline);
-    if (isOnline) {
-      win.loadURL(appURL);
-    } else {
-      win.loadFile('./assets/html/offline.html');
-    }
-  });
-
-  //win.loadFile(join(__dirname, 'index.html'));
   win.loadURL(appURL);
 
   // Intercept any navigation away from the app URL and open externally
@@ -177,6 +180,7 @@ if (!firstInstance) {
   app.on("second-instance", (event) => {
     console.log("second-instance");
     win.show();
+    win.focus();
   });
 }
 
@@ -186,9 +190,9 @@ function createAboutWindow() {
 
   const aboutWindow = new BrowserWindow({
     width: 500,
-    height: 300,
+    height: 420,
     x: x + ((width - 500) / 2),
-    y: y + ((height - 500) / 2),
+    y: y + ((height - 420) / 2),
     title: 'About',
     webPreferences: {
       nodeIntegration: true,
@@ -227,14 +231,6 @@ function createAboutWindow() {
     shell.openExternal(url);
     return { action: 'deny' }
   });
-
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.key.toLowerCase() === 'r') {
-      console.log('Pressed Control+R')
-      event.preventDefault()
-      win.loadURL(appURL);
-    }
-  })
 }
 
 ipcMain.on('get-app-metadata', (event) => {
