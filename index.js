@@ -127,21 +127,36 @@ function createWindow () {
     win.loadFile('./assets/html/offline.html');
   });
 
-  // Intercept any navigation away from the app URL and open externally
+  // Hosts allowed to navigate within the Electron window
+  const allowedHosts = new Set([
+    'lumo.proton.me',
+    'account.proton.me',
+  ]);
+
+  // Intercept navigation and only allow app + auth hosts in-app
   win.webContents.on('will-navigate', (event, url) => {
-    const appHost = new URL(appURL).host;
     const targetHost = new URL(url).host;
-    if (targetHost !== appHost) {
+    if (!allowedHosts.has(targetHost)) {
       console.log('will-navigate external: ', url);
       event.preventDefault();
       shell.openExternal(url);
     }
   });
 
-  // Link clicks open new windows, let's force them to open links in
-  // the default browser
+  // New-window requests (window.open / target="_blank"): only keep the
+  // app host in-app; everything else (including account.proton.me links
+  // to other Proton services) opens in the default browser
   win.webContents.setWindowOpenHandler(({url}) => {
     console.log('windowOpenHandler: ', url);
+    try {
+      const host = new URL(url).host;
+      if (host === new URL(appURL).host) {
+        win.loadURL(url);
+        return { action: 'deny' };
+      }
+    } catch (e) {
+      // If URL parsing fails, open externally
+    }
     shell.openExternal(url);
     return { action: 'deny' }
   });

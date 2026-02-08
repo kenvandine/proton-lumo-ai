@@ -18,10 +18,24 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Listen for click events and fire open-external-link as needed
+    // Hosts allowed to navigate within the Electron window
+    const allowedHosts = new Set([
+        'lumo.proton.me',
+        'account.proton.me',
+    ]);
+
+    // Listen for click events and open non-allowed links externally
     document.addEventListener('click', (event) => {
         const link = event.target.closest('a');
         if (link && link.href && link.href.startsWith('http')) {
+            try {
+                const host = new URL(link.href).host;
+                if (allowedHosts.has(host)) {
+                    return; // Allow app + auth links to navigate in-app
+                }
+            } catch (e) {
+                // If URL parsing fails, open externally as a safety measure
+            }
             event.preventDefault();
             ipcRenderer.send('open-external-link', link.href);
         }
