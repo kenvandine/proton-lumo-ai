@@ -1,0 +1,86 @@
+name: Screenshot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgbm1 libasound2 libgtk-3-0 libnss3 libxss1 libxtst6 xauth
+          npm install
+
+      - name: Run app and capture screenshot
+        run: |
+          # Start Xvfb on display :99
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
+          XVFB_PID=$!
+          
+          # Wait for Xvfb to be ready
+          sleep 2
+          
+          # Run the screenshot script with Electron
+          SCREENSHOT_PATH=screenshot.png xvfb-run -a electron screenshot.js
+          
+          # Kill Xvfb
+          kill $XVFB_PID || true
+          
+          # Verify screenshot was created
+          ls -lh screenshot.png
+          file screenshot.png
+
+      - name: Upload screenshot as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-screenshot
+          path: screenshot.png
+          retention-days: 30
+
+      - name: Comment PR with screenshot
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read the screenshot
+            const screenshotPath = path.join(process.env.GITHUB_WORKSPACE, 'screenshot.png');
+            const screenshotBuffer = fs.readFileSync(screenshotPath);
+            const screenshotBase64 = screenshotBuffer.toString('base64');
+            
+            // Upload the screenshot as a release asset (workaround for embedding)
+            // Since we can't directly embed, we'll provide a link to the artifact
+            const runId = context.runId;
+            const repoUrl = context.payload.repository.html_url;
+            const artifactUrl = `${repoUrl}/actions/runs/${runId}`;
+            
+            const body = `## 📸 App Screenshot
+            
+            A screenshot of the running application has been captured.
+            
+            **Download the screenshot:** [View Artifacts](${artifactUrl})
+            
+            > 💡 Click "View Artifacts" above to download the screenshot artifact from this workflow run.`;
+            
+            // Post comment on the PR
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
