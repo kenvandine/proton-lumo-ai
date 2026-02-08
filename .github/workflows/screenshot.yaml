@@ -49,18 +49,40 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read the screenshot file
+            const screenshotPath = path.join(process.env.GITHUB_WORKSPACE, 'screenshot.png');
+            const screenshotBuffer = fs.readFileSync(screenshotPath);
+            const screenshotBase64 = screenshotBuffer.toString('base64');
+            
             // Get workflow run URL for artifacts
             const runId = context.runId;
             const repoUrl = context.payload.repository.html_url;
             const artifactUrl = `${repoUrl}/actions/runs/${runId}`;
             
-            const body = `## 📸 App Screenshot
+            // Create a data URL for the image (for smaller images)
+            // Note: GitHub may truncate very large data URLs
+            const dataUrl = `data:image/png;base64,${screenshotBase64}`;
             
-            A screenshot of the running application has been captured.
+            // Check if the image is reasonably sized for embedding
+            const imageSizeKB = Math.round(screenshotBuffer.length / 1024);
+            const canEmbed = imageSizeKB < 200; // GitHub comment size limits
             
-            **Download the screenshot:** [View Artifacts](${artifactUrl})
+            let body = `## 📸 App Screenshot\n\n`;
             
-            > 💡 Click "View Artifacts" above to download the screenshot artifact from this workflow run.`;
+            if (canEmbed) {
+              // Embed using data URL
+              body += `<details open>\n<summary>Screenshot (${imageSizeKB} KB)</summary>\n\n`;
+              body += `![App Screenshot](${dataUrl})\n\n`;
+              body += `</details>\n\n`;
+            } else {
+              body += `Screenshot captured (${imageSizeKB} KB - too large to embed directly)\n\n`;
+            }
+            
+            body += `**Download:** [View Artifacts](${artifactUrl})\n\n`;
+            body += `> 💡 The screenshot is available as a workflow artifact above.`;
             
             // Post comment on the PR
             await github.rest.issues.createComment({
