@@ -44,6 +44,22 @@ jobs:
           path: screenshot.png
           retention-days: 30
 
+      - name: Upload screenshot to catbox (free anonymous hosting)
+        if: github.event_name == 'pull_request'
+        id: catbox
+        continue-on-error: true
+        run: |
+          # Upload to catbox.moe (free, anonymous, no API key needed)
+          response=$(curl -s -F "reqtype=fileupload" -F "fileToUpload=@screenshot.png" https://catbox.moe/user/api.php)
+          
+          if [ -n "$response" ] && [[ $response == http* ]]; then
+            echo "image_url=$response" >> $GITHUB_OUTPUT
+            echo "Uploaded to: $response"
+          else
+            echo "Upload failed"
+            echo "$response"
+          fi
+
       - name: Comment PR with screenshot
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -52,7 +68,7 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             
-            // Read the screenshot file
+            // Read the screenshot file for size info
             const screenshotPath = path.join(process.env.GITHUB_WORKSPACE, 'screenshot.png');
             const screenshotBuffer = fs.readFileSync(screenshotPath);
             const imageSizeKB = Math.round(screenshotBuffer.length / 1024);
@@ -62,44 +78,8 @@ jobs:
             const repoUrl = context.payload.repository.html_url;
             const artifactUrl = `${repoUrl}/actions/runs/${runId}`;
             
-            let imageUrl = '';
-            
-            try {
-              // Upload image to GitHub by creating a temporary comment and extracting the URL
-              // This uses GitHub's own CDN for image hosting
-              const tempComment = await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: '![screenshot](data:image/png;base64,' + screenshotBuffer.toString('base64') + ')'
-              });
-              
-              // GitHub will convert the data URL to a proper CDN URL
-              // Wait a moment for GitHub to process it
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              // Get the comment back to extract the CDN URL
-              const comment = await github.rest.issues.getComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: tempComment.data.id
-              });
-              
-              // Extract the image URL from the comment body
-              const match = comment.data.body.match(/!\[screenshot\]\((https:\/\/[^)]+)\)/);
-              if (match && match[1]) {
-                imageUrl = match[1];
-              }
-              
-              // Delete the temporary comment
-              await github.rest.issues.deleteComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: tempComment.data.id
-              });
-            } catch (error) {
-              console.log('Failed to upload image to GitHub CDN:', error.message);
-            }
+            // Check if image upload succeeded
+            const imageUrl = process.env.IMAGE_URL || '';
             
             let body = `## 📸 App Screenshot\n\n`;
             
@@ -122,3 +102,5 @@ jobs:
               issue_number: context.issue.number,
               body: body
             });
+        env:
+          IMAGE_URL: ${{ steps.catbox.outputs.image_url }}
