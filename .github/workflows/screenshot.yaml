@@ -30,7 +30,7 @@ jobs:
         run: |
           # Run the screenshot script with Electron using xvfb-run
           # xvfb-run automatically starts and manages Xvfb
-          SCREENSHOT_PATH=screenshot.png xvfb-run -a electron screenshot.js
+          SCREENSHOT_PATH=screenshot.png xvfb-run -a npx electron screenshot.js
           
           # Verify screenshot was created
           ls -lh screenshot.png
