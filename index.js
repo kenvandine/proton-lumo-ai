@@ -69,6 +69,13 @@ ipcMain.on('open-external-link', (event, url) => {
   }
 });
 
+// Retry connection from offline page
+ipcMain.on('retry-connection', () => {
+  console.log('Retrying connection...');
+  wasOffline = false;
+  win.loadURL(appURL);
+});
+
 // Listen for network status updates from the preload script
 // Only act on transitions to avoid reload loops
 ipcMain.on('network-status', (event, isOnline) => {
@@ -76,7 +83,7 @@ ipcMain.on('network-status', (event, isOnline) => {
   if (isOnline && wasOffline) {
     wasOffline = false;
     win.loadURL(appURL);
-  } else if (!isOnline) {
+  } else if (!isOnline && !wasOffline) {
     wasOffline = true;
     win.loadFile('./assets/html/offline.html');
   }
@@ -112,6 +119,13 @@ function createWindow () {
   });
 
   win.loadURL(appURL);
+
+  // Show offline page if the URL fails to load (e.g. no internet)
+  win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log(`did-fail-load: ${errorDescription} (${errorCode})`);
+    wasOffline = true;
+    win.loadFile('./assets/html/offline.html');
+  });
 
   // Intercept any navigation away from the app URL and open externally
   win.webContents.on('will-navigate', (event, url) => {

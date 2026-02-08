@@ -10,8 +10,13 @@ window.addEventListener('offline', updateNetworkStatus);
 
 // Listen for DOMContentLoaded event
 window.addEventListener('DOMContentLoaded', () => {
-    // Send initial network status
-    updateNetworkStatus();
+    // Wire up retry button on offline page
+    const retryBtn = document.getElementById('retry-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+            ipcRenderer.send('retry-connection');
+        });
+    }
 
     // Listen for click events and fire open-external-link as needed
     document.addEventListener('click', (event) => {
