@@ -1,9 +1,9 @@
 [Desktop Entry]
 Encoding=UTF-8
-Name=Proton Lumo.ai
-Comment=Proton Lumo.ai AI Desktop
+Name=Proton Lumo AI
+Comment=Private AI assistant powered by Proton Lumo
 Type=Application
 Exec=lumo.ai --tray
 Icon=${SNAP}/unpacked/resources/app/assets/img/icon.png
-Categories=Accessories;
-Keywords=AI;Copilot;GPT;ChatGPT;Gemini;DuckAI;LumoAI;Proton;
+Categories=Network;Chat;Utility;
+Keywords=AI;Copilot;GPT;ChatGPT;Gemini;LumoAI;Proton;Assistant;Chat;

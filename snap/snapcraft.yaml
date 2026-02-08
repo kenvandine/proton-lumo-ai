@@ -1,8 +1,19 @@
 name: proton-lumo-ai
-summary: Proton Lumo.ai Desktop
+summary: Private AI assistant powered by Proton Lumo
 description: |
-  Unofficial Web app for Proton's Lumo.ai providing the desktop user
-  experience you would expect on Ubuntu or any other Linux desktop
+  Unofficial desktop app for Proton's Lumo.ai, providing a native Linux
+  experience with system tray integration, keyboard shortcuts, and
+  offline detection.
+
+  Features:
+  - System tray with show/hide toggle
+  - Optional autostart on login
+  - Ctrl+/- zoom controls
+  - Offline detection with automatic reconnection
+  - External links open in your default browser
+
+  This is an unofficial community project and is not affiliated with
+  Proton AG.
 
 adopt-info: lumo-ai
 grade: stable
@@ -28,12 +39,7 @@ parts:
       - git
     override-pull: |
       craftctl default
-      VERSION=0.0.1
-      #VERSION=$(craftctl get version)
-      #if [ -z $VERSION ]; then
-      #  VERSION=$(git describe --tags --abbrev=10)
-      #  craftctl set version=$VERSION
-      #fi
+      VERSION=$(git describe --tags --abbrev=10 2>/dev/null || echo "0.0.1")
       craftctl set version=$VERSION
       sed -i.bak -e "s|@@VERSION@@|$VERSION|g" $CRAFT_PART_SRC/package.json
     override-build: |
@@ -58,15 +64,6 @@ parts:
     override-build: |
       cp launcher $CRAFT_PART_INSTALL/
 
-  #cleanup:
-  #  after: [ lumo-ai ]
-  #  plugin: nil
-  #  build-snaps: [ gnome-46-2404 ]
-  #  override-prime: |
-  #      set -eux
-  #      cd /snap/gnome-46-2404/current
-  #      find . -type f,l -exec rm -f $SNAPCRAFT_PRIME/{} \;
-
 plugs:
   shmem:
     interface: shared-memory
@@ -76,7 +73,7 @@ apps:
   proton-lumo-ai:
     extensions: [gnome]
     desktop: com.github.kenvandine.lumo.ai.desktop
-    autostart: lumo.ai.desktop
+    autostart: proton-lumo.ai.desktop
     command: launcher
     plugs:
       - audio-playback
