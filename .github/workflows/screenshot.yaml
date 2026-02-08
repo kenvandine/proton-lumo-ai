@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libgbm1 libasound2 libgtk-3-0 libnss3 libxss1 libxtst6 xauth
+          sudo apt-get install -y xvfb libgbm1 libasound2t64 libgtk-3-0 libnss3 libxss1 libxtst6 xauth
           npm install
 
       - name: Run app and capture screenshot
