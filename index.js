@@ -11,6 +11,8 @@ const icon = nativeImage.createFromPath(join(__dirname, '/assets/img/icon.png'))
 const isTray = process.argv.includes('--tray');
 const snapPath = process.env.SNAP
 const snapUserData = process.env.SNAP_USER_DATA
+const isScreenshotMode = process.env.TEST_SCREENSHOT === '1';
+const screenshotPath = process.env.SCREENSHOT_PATH || 'screenshot.png';
 
 function initializeAutostart() {
   if (fs.existsSync(snapUserData + '/.config/autostart/proton-lumo.ai.desktop')) {
@@ -97,12 +99,12 @@ function createWindow () {
   console.log(`Primary Screen Geometry - Width: ${width} Height: ${height} X: ${x} Y: ${y}`);
 
   win = new BrowserWindow({
-    width: width * 0.6,
-    height: height * 0.8,
-    x: x + ((width - (width * 0.6)) / 2),
-    y: y + ((height - (height * 0.8)) / 2),
+    width: isScreenshotMode ? 1920 : width * 0.6,
+    height: isScreenshotMode ? 1080 : height * 0.8,
+    x: isScreenshotMode ? undefined : x + ((width - (width * 0.6)) / 2),
+    y: isScreenshotMode ? undefined : y + ((height - (height * 0.8)) / 2),
     icon: icon,
-    show: !isTray, // Start hiden if --tray
+    show: isScreenshotMode ? false : !isTray, // Start hidden if --tray or screenshot mode
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       nodeIntegration: true,
@@ -114,6 +116,7 @@ function createWindow () {
   win.removeMenu();
 
   win.on('close', (event) => {
+    if (isScreenshotMode) return;
     event.preventDefault();
     win.hide();
   });
@@ -123,6 +126,21 @@ function createWindow () {
   // Show offline page if the URL fails to load (e.g. no internet)
   win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.log(`did-fail-load: ${errorDescription} (${errorCode})`);
+
+    if (isScreenshotMode) {
+      setTimeout(async () => {
+        try {
+          const image = await win.capturePage();
+          fs.writeFileSync(screenshotPath, image.toPNG());
+          console.log(`Screenshot of error state saved to ${screenshotPath}`);
+        } catch (error) {
+          console.error('Error capturing error screenshot:', error);
+        }
+        app.exit(1);
+      }, 2000);
+      return;
+    }
+
     wasOffline = true;
     win.loadFile('./assets/html/offline.html');
   });
@@ -195,6 +213,22 @@ function createWindow () {
         background: #555;
       }
     `);
+
+    if (isScreenshotMode) {
+      console.log('Screenshot mode: waiting 5 seconds for content to render...');
+      setTimeout(async () => {
+        try {
+          console.log('Capturing screenshot...');
+          const image = await win.capturePage();
+          fs.writeFileSync(screenshotPath, image.toPNG());
+          console.log(`Screenshot saved to ${screenshotPath}`);
+          app.quit();
+        } catch (error) {
+          console.error('Error capturing screenshot:', error);
+          app.exit(1);
+        }
+      }, 5000);
+    }
   });
 
   //win.webContents.openDevTools();
@@ -282,54 +316,56 @@ app.on('ready', () => {
   console.log(`Electron Version: ${process.versions.electron}`);
   console.log(`App Version: ${app.getVersion()}`);
 
-  tray = new Tray(icon);
-  // Ignore double click events for the tray icon
-  tray.setIgnoreDoubleClickEvents(true)
-  tray.on('click', () => {
-    console.log("AppIndicator clicked");
-    showOrHide();
-  });
+  if (!isScreenshotMode) {
+    tray = new Tray(icon);
+    // Ignore double click events for the tray icon
+    tray.setIgnoreDoubleClickEvents(true)
+    tray.on('click', () => {
+      console.log("AppIndicator clicked");
+      showOrHide();
+    });
 
-  // Ensure autostart is set properly at start
-  initializeAutostart();
+    // Ensure autostart is set properly at start
+    initializeAutostart();
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: `Show/Hide Proton Lumo.ai`,
-      icon: icon,
-      click: () => {
-        showOrHide();
-      }
-    },
-    {
-      label: 'Autostart',
-      type: 'checkbox',
-      checked: autostart,
-      click: () => {
-        autostart = contextMenu.items[1].checked;
-        console.log("Autostart toggled: " + autostart);
-        handleAutoStartChange();
-        // We need to setContextMenu to get the state changed for checked
-        tray.setContextMenu(contextMenu);
-      }
-    },
-    { type: 'separator' },
-    { label: 'About',
-      click: () => {
-        console.log("About clicked");
-	createAboutWindow();
-      }
-    },
-    { label: 'Quit',
-      click: () => {
-        console.log("Quit clicked, Exiting");
-        app.exit();
-      }
-    },
-  ]);
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: `Show/Hide Proton Lumo.ai`,
+        icon: icon,
+        click: () => {
+          showOrHide();
+        }
+      },
+      {
+        label: 'Autostart',
+        type: 'checkbox',
+        checked: autostart,
+        click: () => {
+          autostart = contextMenu.items[1].checked;
+          console.log("Autostart toggled: " + autostart);
+          handleAutoStartChange();
+          // We need to setContextMenu to get the state changed for checked
+          tray.setContextMenu(contextMenu);
+        }
+      },
+      { type: 'separator' },
+      { label: 'About',
+        click: () => {
+          console.log("About clicked");
+	  createAboutWindow();
+        }
+      },
+      { label: 'Quit',
+        click: () => {
+          console.log("Quit clicked, Exiting");
+          app.exit();
+        }
+      },
+    ]);
 
-  tray.setToolTip('Proton Lumo.ai');
-  tray.setContextMenu(contextMenu);
+    tray.setToolTip('Proton Lumo.ai');
+    tray.setContextMenu(contextMenu);
+  }
 
   createWindow();
 });
