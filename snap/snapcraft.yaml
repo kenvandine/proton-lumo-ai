@@ -51,7 +51,8 @@ parts:
       mv dist/linux*-unpacked/* $SNAPCRAFT_PART_INSTALL/unpacked 
       cp $SNAPCRAFT_PROJECT_DIR/com.github.kenvandine.lumo.ai-autostart.desktop $SNAPCRAFT_PART_INSTALL/
     prime:
-      - com.github.kenvandine.lumo.ai*.desktop
+      - com.github.kenvandine.lumo.ai.desktop
+      - com.github.kenvandine.lumo.ai-autostart.desktop
       - unpacked
       - -*/assets/img/icon.png
       - -*/chrome-sandbox
@@ -73,7 +74,7 @@ apps:
   proton-lumo-ai:
     extensions: [gnome]
     desktop: com.github.kenvandine.lumo.ai.desktop
-    autostart: proton-lumo.ai.desktop
+    autostart: com.github.kenvandine.lumo.ai-autostart.desktop
     command: launcher
     plugs:
       - audio-playback
