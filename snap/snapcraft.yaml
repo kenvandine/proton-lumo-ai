@@ -18,7 +18,7 @@ description: |
 adopt-info: lumo-ai
 grade: stable
 confinement: strict
-base: core24
+base: core22
 contact: https://github.com/kenvandine/proton-lumo-ai/issues
 issues: https://github.com/kenvandine/proton-lumo-ai/issues
 website: https://github.com/kenvandine/proton-lumo-ai
