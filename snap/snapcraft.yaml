@@ -46,9 +46,12 @@ parts:
       npm ci
       npm run build
       mkdir -p $SNAPCRAFT_PART_INSTALL/unpacked
+      # Copy desktop files and icon to the install directory
       cp $SNAPCRAFT_PROJECT_DIR/com.github.kenvandine.lumo.ai.desktop $SNAPCRAFT_PART_INSTALL/
       cp $SNAPCRAFT_PROJECT_DIR/assets/img/icon.png $SNAPCRAFT_PART_INSTALL/
-      mv dist/linux*-unpacked/* $SNAPCRAFT_PART_INSTALL/unpacked 
+      # Move the built electron app to the unpacked directory
+      mv dist/linux*-unpacked/* $SNAPCRAFT_PART_INSTALL/unpacked/
+      # Copy autostart desktop file
       cp $SNAPCRAFT_PROJECT_DIR/com.github.kenvandine.lumo.ai-autostart.desktop $SNAPCRAFT_PART_INSTALL/
     prime:
       - com.github.kenvandine.lumo.ai.desktop
