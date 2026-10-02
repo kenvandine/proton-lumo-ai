@@ -43,7 +43,7 @@ parts:
       craftctl set version=$VERSION
       sed -i.bak -e "s|@@VERSION@@|$VERSION|g" $CRAFT_PART_SRC/package.json
     override-build: |
-      npm install
+      npm ci
       npm run build
       mkdir -p $SNAPCRAFT_PART_INSTALL/unpacked
       cp $SNAPCRAFT_PROJECT_DIR/com.github.kenvandine.lumo.ai.desktop $SNAPCRAFT_PART_INSTALL/
