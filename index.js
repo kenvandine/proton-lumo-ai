@@ -1,391 +1,59 @@
-const { app, BrowserWindow, screen, Tray, Menu, nativeImage, ipcMain, shell} = require('electron');
-const { join } = require('path');
-const fs = require('fs');
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
 
-let tray = null;
-let win = null;
-let autostart = false;
+let win;
 let wasOffline = false;
-const appURL = 'https://lumo.proton.me'
-const icon = nativeImage.createFromPath(join(__dirname, '/assets/img/icon.png'));
-const isTray = process.argv.includes('--tray');
-const snapPath = process.env.SNAP
-const snapUserData = process.env.SNAP_USER_DATA
-const isScreenshotMode = process.env.TEST_SCREENSHOT === '1';
-const screenshotPath = process.env.SCREENSHOT_PATH || 'screenshot.png';
+let reloadTimeout = null;
 
-function initializeAutostart() {
-  if (fs.existsSync(snapUserData + '/.config/autostart/proton-lumo.ai.desktop')) {
-    console.log('Autostart file exists')
-    autostart = true;
-  } else {
-    console.log('Autostart file does not exist')
-    autostart = false;
-  }
-}
+const appURL = 'https://lumo.proton.me';
 
-function handleAutoStartChange() {
-  if (autostart) {
-    console.log("Enabling autostart");
-    if (!fs.existsSync(snapUserData + '/.config/autostart')) {
-      fs.mkdirSync(snapUserData + '/.config/autostart', { recursive: true });
-    }
-    if (!fs.existsSync(snapUserData + '/.config/autostart/proton-lumo.ai.desktop')) {
-      fs.copyFileSync(snapPath + '/com.github.kenvandine.lumo.ai-autostart.desktop', snapUserData + '/.config/autostart/proton-lumo.ai.desktop');
-    }
-  } else {
-    console.log("Disabling autostart");
-    if (fs.existsSync(snapUserData + '/.config/autostart/proton-lumo.ai.desktop')) {
-      fs.rmSync(snapUserData + '/.config/autostart/proton-lumo.ai.desktop');
-    }
-  }
-}
-
-// IPC listeners (registered once, outside createWindow to avoid leaks)
-ipcMain.on('zoom-in', () => {
-  console.log('zoom-in');
-  const currentZoom = win.webContents.getZoomLevel();
-  win.webContents.setZoomLevel(currentZoom + 1);
-});
-
-ipcMain.on('zoom-out', () => {
-  console.log('zoom-out');
-  const currentZoom = win.webContents.getZoomLevel();
-  win.webContents.setZoomLevel(currentZoom - 1);
-});
-
-ipcMain.on('zoom-reset', () => {
-  console.log('zoom-reset');
-  win.webContents.setZoomLevel(0);
-});
-
-ipcMain.on('log-message', (event, message) => {
-  console.log('Log from preload: ', message);
-});
-
-// Open links with default browser
-ipcMain.on('open-external-link', (event, url) => {
-  console.log('open-external-link: ', url);
-  if (url) {
-    shell.openExternal(url);
-  }
-});
-
-// Retry connection from offline page
-ipcMain.on('retry-connection', () => {
-  console.log('Retrying connection...');
-  wasOffline = false;
-  win.loadURL(appURL);
-});
-
-// Listen for network status updates from the preload script
-// Only act on transitions to avoid reload loops
-ipcMain.on('network-status', (event, isOnline) => {
-  console.log(`Network status: ${isOnline ? 'online' : 'offline'}`);
-  if (isOnline && wasOffline) {
-    wasOffline = false;
-    win.loadURL(appURL);
-  } else if (!isOnline && !wasOffline) {
-    wasOffline = true;
-    win.loadFile('./assets/html/offline.html');
-  }
-});
-
-function createWindow () {
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { x, y, width, height } = primaryDisplay.bounds;
-
-  // Log geometry information for easier debugging
-  console.log(`Primary Screen Geometry - Width: ${width} Height: ${height} X: ${x} Y: ${y}`);
-
+function createWindow() {
   win = new BrowserWindow({
-    width: isScreenshotMode ? 1920 : width * 0.6,
-    height: isScreenshotMode ? 1080 : height * 0.8,
-    x: isScreenshotMode ? undefined : x + ((width - (width * 0.6)) / 2),
-    y: isScreenshotMode ? undefined : y + ((height - (height * 0.8)) / 2),
-    icon: icon,
-    show: isScreenshotMode ? false : !isTray, // Start hidden if --tray or screenshot mode
-    webPreferences: {
-      preload: join(__dirname, 'preload.js'),
-      nodeIntegration: true,
-      contextIsolation: true,
-      sandbox: false
-    }
-  });
-
-  win.removeMenu();
-
-  win.on('close', (event) => {
-    if (isScreenshotMode) return;
-    event.preventDefault();
-    win.hide();
-  });
-
-  win.loadURL(appURL);
-
-  // Show offline page if the URL fails to load (e.g. no internet)
-  win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.log(`did-fail-load: ${errorDescription} (${errorCode})`);
-
-    if (isScreenshotMode) {
-      setTimeout(async () => {
-        try {
-          const image = await win.capturePage();
-          fs.writeFileSync(screenshotPath, image.toPNG());
-          console.log(`Screenshot of error state saved to ${screenshotPath}`);
-        } catch (error) {
-          console.error('Error capturing error screenshot:', error);
-        }
-        app.exit(1);
-      }, 2000);
-      return;
-    }
-
-    wasOffline = true;
-    win.loadFile('./assets/html/offline.html');
-  });
-
-  // Hosts allowed to navigate within the Electron window
-  const allowedHosts = new Set([
-    'lumo.proton.me',
-    'account.proton.me',
-  ]);
-
-  // Intercept navigation and only allow app + auth hosts in-app
-  win.webContents.on('will-navigate', (event, url) => {
-    const targetHost = new URL(url).host;
-    if (!allowedHosts.has(targetHost)) {
-      console.log('will-navigate external: ', url);
-      event.preventDefault();
-      shell.openExternal(url);
-    }
-  });
-
-  // New-window requests (window.open / target="_blank"): only keep the
-  // app host in-app; everything else (including account.proton.me links
-  // to other Proton services) opens in the default browser
-  win.webContents.setWindowOpenHandler(({url}) => {
-    console.log('windowOpenHandler: ', url);
-    try {
-      const host = new URL(url).host;
-      if (host === new URL(appURL).host) {
-        win.loadURL(url);
-        return { action: 'deny' };
-      }
-    } catch (e) {
-      // If URL parsing fails, open externally
-    }
-    shell.openExternal(url);
-    return { action: 'deny' }
-  });
-
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.key.toLowerCase() === 'r') {
-      console.log('Pressed Control+R')
-      event.preventDefault()
-      win.loadURL(appURL);
-    }
-  })
-
-  win.webContents.on('did-finish-load', () => {
-    // Hide the sidebar menu
-    win.webContents.executeJavaScript(`
-      const sidemenu = document.getElementById('sidemenu');
-      const btn = document.getElementById('aichat-side-menu-button');
-      if (btn) {
-        btn.style.display = 'none';
-      }
-   `);
-    win.webContents.insertCSS(`
-      ::-webkit-scrollbar {
-        width: 5px;
-        height: 12px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 10px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #555;
-      }
-    `);
-
-    if (isScreenshotMode) {
-      console.log('Screenshot mode: waiting 5 seconds for content to render...');
-      setTimeout(async () => {
-        try {
-          console.log('Capturing screenshot...');
-          const image = await win.capturePage();
-          fs.writeFileSync(screenshotPath, image.toPNG());
-          console.log(`Screenshot saved to ${screenshotPath}`);
-          app.quit();
-        } catch (error) {
-          console.error('Error capturing screenshot:', error);
-          app.exit(1);
-        }
-      }, 5000);
-    }
-  });
-
-  //win.webContents.openDevTools();
-}
-
-// Ensure we're a single instance app
-const firstInstance = app.requestSingleInstanceLock();
-
-if (!firstInstance) {
-  app.quit();
-} else {
-  app.on("second-instance", (event) => {
-    console.log("second-instance");
-    win.show();
-    win.focus();
-  });
-}
-
-function createAboutWindow() {
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { x, y, width, height } = primaryDisplay.bounds;
-
-  const aboutWindow = new BrowserWindow({
-    width: 500,
-    height: 420,
-    x: x + ((width - 500) / 2),
-    y: y + ((height - 420) / 2),
-    title: 'About',
+    width: 1200,
+    height: 800,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
-    modal: true,  // Make the About window modal
-    parent: win  // Set the main window as parent
+    icon: path.join(__dirname, 'assets/img/icon.png'),
   });
 
-  aboutWindow.loadFile('./assets/html/about.html');
-  aboutWindow.removeMenu();
-
-  // Read version from package.json
-  const packageJson = JSON.parse(fs.readFileSync(join(__dirname, 'package.json')));
-  const appVersion = packageJson.version;
-  const appDescription = packageJson.description;
-  const appTitle = packageJson.title;
-  const appBugsUrl = packageJson.bugs.url;
-  const appHomePage = packageJson.homepage;
-  const appAuthor = packageJson.author;
-
-  // Send version to the About window
-  aboutWindow.webContents.on('did-finish-load', () => {
-    console.log("did-finish-load", appTitle);
-    aboutWindow.webContents.send('app-version', appVersion);
-    aboutWindow.webContents.send('app-description', appDescription);
-    aboutWindow.webContents.send('app-title', appTitle);
-    aboutWindow.webContents.send('app-bugs-url', appBugsUrl);
-    aboutWindow.webContents.send('app-homepage', appHomePage);
-    aboutWindow.webContents.send('app-author', appAuthor);
-  });
-  // Link clicks open new windows, let's force them to open links in
-  // the default browser
-  aboutWindow.webContents.setWindowOpenHandler(({url}) => {
-    console.log('windowOpenHandler: ', url);
-    shell.openExternal(url);
-    return { action: 'deny' }
-  });
+  win.loadURL(appURL);
 }
 
-ipcMain.on('get-app-metadata', (event) => {
-    const packageJson = JSON.parse(fs.readFileSync(join(__dirname, 'package.json')));
-    const appVersion = packageJson.version;
-    const appDescription = packageJson.description;
-    const appTitle = packageJson.title;
-    const appBugsUrl = packageJson.bugs.url;
-    const appHomePage = packageJson.homepage;
-    const appAuthor = packageJson.author;
-    event.sender.send('app-version', appVersion);
-    event.sender.send('app-description', appDescription);
-    event.sender.send('app-title', appTitle);
-    event.sender.send('app-bugs-url', appBugsUrl);
-    event.sender.send('app-homepage', appHomePage);
-    event.sender.send('app-author', appAuthor);
-});
-
-app.on('ready', () => {
-  console.log(`Electron Version: ${process.versions.electron}`);
-  console.log(`App Version: ${app.getVersion()}`);
-
-  if (!isScreenshotMode) {
-    tray = new Tray(icon);
-    // Ignore double click events for the tray icon
-    tray.setIgnoreDoubleClickEvents(true)
-    tray.on('click', () => {
-      console.log("AppIndicator clicked");
-      showOrHide();
-    });
-
-    // Ensure autostart is set properly at start
-    initializeAutostart();
-
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: `Show/Hide Proton Lumo.ai`,
-        icon: icon,
-        click: () => {
-          showOrHide();
-        }
-      },
-      {
-        label: 'Autostart',
-        type: 'checkbox',
-        checked: autostart,
-        click: () => {
-          autostart = contextMenu.items[1].checked;
-          console.log("Autostart toggled: " + autostart);
-          handleAutoStartChange();
-          // We need to setContextMenu to get the state changed for checked
-          tray.setContextMenu(contextMenu);
-        }
-      },
-      { type: 'separator' },
-      { label: 'About',
-        click: () => {
-          console.log("About clicked");
-	  createAboutWindow();
-        }
-      },
-      { label: 'Quit',
-        click: () => {
-          console.log("Quit clicked, Exiting");
-          app.exit();
-        }
-      },
-    ]);
-
-    tray.setToolTip('Proton Lumo.ai');
-    tray.setContextMenu(contextMenu);
-  }
-
-  createWindow();
-});
-
-function showOrHide() {
-  console.log("showOrHide");
-  if (win.isVisible()) {
-    win.hide();
-  } else {
-    win.show();
-  }
-}
+app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  console.log("window-all-closed");
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
 
 app.on('activate', () => {
-  console.log("ACTIVATE");
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+  }
+});
+
+// Handle network status changes with debounce to prevent reload loops
+ipcMain.on('network-status', (event, isOnline) => {
+  // Clear any pending reload
+  if (reloadTimeout) {
+    clearTimeout(reloadTimeout);
+    reloadTimeout = null;
+  }
+
+  if (isOnline && wasOffline) {
+    wasOffline = false;
+    // Debounce the reload to prevent flapping
+    reloadTimeout = setTimeout(() => {
+      // Only reload if we're not already on the correct page
+      if (win && !win.webContents.getURL().includes('lumo.proton.me')) {
+        win.loadURL(appURL);
+      }
+    }, 1000); // 1 second debounce
+  } else if (!isOnline && !wasOffline) {
+    wasOffline = true;
+    win.loadFile('./assets/html/offline.html');
   }
 });
