@@ -1,44 +1,25 @@
 {
-  "name": "lumo.ai",
-  "title": "Proton Lumo.ai Desktop",
+  "name": "proton-lumo-ai",
+  "productName": "Proton Lumo AI",
   "version": "@@VERSION@@",
-  "description": "Unofficial Web app for Proton's Lumo.ai providing the desktop user experience you would expect on Ubuntu or any other Linux desktop.",
+  "description": "Unofficial desktop app for Proton's Lumo.ai",
   "main": "index.js",
   "scripts": {
     "start": "electron .",
-    "start-tray": "electron . --tray",
-    "build": "electron-builder --publish never",
-    "screenshot": "TEST_SCREENSHOT=1 electron ."
-  },
-  "build": {
-    "asar": false,
-    "linux": {
-      "target": [
-	      "dir"
-      ],
-      "category": "Utility",
-      "artifactName": "${name}_${version}_linux.${ext}"
-    },
-    "extraFiles": [
-      "com.github.kenvandine.${name}.desktop"
-    ]
+    "build": "electron-builder"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kenvandine/proton-lumo-ai.git"
   },
   "author": "Ken VanDine",
-  "license": "GPL-3.0",
+  "license": "GPL-3.0+",
   "bugs": {
     "url": "https://github.com/kenvandine/proton-lumo-ai/issues"
   },
   "homepage": "https://github.com/kenvandine/proton-lumo-ai#readme",
   "devDependencies": {
-    "electron": "^40.2.1",
-    "electron-builder": "^26.7.0",
-    "electron-package": "^0.1.0"
-  },
-  "overrides": {
-    "@noble/hashes": "1.8.0"
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
   }
 }
